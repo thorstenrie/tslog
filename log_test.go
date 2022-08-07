@@ -1,8 +1,7 @@
 package tslog
 
 import (
-	"bufio"
-	"fmt"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -32,7 +31,9 @@ func TestEmpty(t *testing.T) {
 	if err := setEnv(""); err != nil {
 		t.Errorf("set empty env TS_LOGFILE failed: %v", err)
 	}
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func TestNotSet(t *testing.T) {
@@ -40,46 +41,60 @@ func TestNotSet(t *testing.T) {
 		t.Errorf("unset env TS_LOGFILE failed: %v", err)
 	}
 	Reset()
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func TestDirectory1(t *testing.T) {
 	if err := setEnv("/tmp/"); err != nil {
 		t.Errorf("set env TS_LOGFILE = /tmp/ failed: %v", err)
 	}
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func TestDirectory2(t *testing.T) {
 	if err := setEnv("/tmp"); err != nil {
 		t.Errorf("set env TS_LOGFILE = /tmp failed: %v", err)
 	}
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func TestStdout(t *testing.T) {
 	if err := setEnv("stdout"); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func TestDiscard(t *testing.T) {
 	if err := setEnv("discard"); err != nil {
 		t.Errorf("set env TS_LOGFILE = discard failed: %v", err)
 	}
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func TestInit(t *testing.T) {
-	testLog(testcases)
+	for tc := range testcases {
+		testLog(testcases[tc])
+	}
 }
 
 func BenchmarkInfoLog(b *testing.B) {
 	tmpLog(b).Close()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		testLog(testcases)
+		for tc := range testcases {
+			testLog(testcases[tc])
+		}
 	}
 }
 
@@ -106,30 +121,23 @@ func FuzzInfo(f *testing.F) {
 		f.Add(tc.in)
 	}
 	f.Fuzz(func(t *testing.T, a string) {
-		tc := []testcase{{prefix: infoPrefix, in: a}}
+		tc := testcase{prefix: infoPrefix, in: a}
 		testWrapper(t, tc, testLength)
 		testWrapper(t, tc, testPrefix)
 		testWrapper(t, tc, testMessage)
 	})
 }
 
-func testWrapper(t *testing.T, tc []testcase, tf testFunc) {
+func testWrapper(t *testing.T, tc testcase, tf testFunc) {
 	f := tmpLog(t)
-	fmt.Println(f.Name())
 	testLog(tc)
-	scanner := bufio.NewScanner(f)
 	var want testcase
-	for i := 0; scanner.Scan(); i++ {
-		if ln := scanner.Text(); len(ln) > 0 {
-			if i < len(tc) {
-				want = tc[i]
-			} else {
-				want = testcase{prefix: errorPrefix, in: ""}
-				t.Errorf("log file with %d lines expected, but got additional log message %v", len(testcases), ln)
-			}
-			tf(t, &testStruct{in: ln, want: want})
-		}
+	in, err := io.ReadAll(f)
+	if err != nil {
+		t.Errorf("open %v failed: %v", f.Name(), err)
+		return
 	}
+	tf(t, &testStruct{in: string(in), want: want})
 	if err := f.Close(); err != nil {
 		t.Errorf("closing %v failed: %v", f.Name(), err)
 	}
@@ -191,27 +199,30 @@ func testMessage(t *testing.T, tc *testStruct) {
 }
 
 func TestLogLength(t *testing.T) {
-	testWrapper(t, testcases, testLength)
+	for tc := range testcases {
+		testWrapper(t, testcases[tc], testLength)
+	}
 }
 
 func TestLogPrefix(t *testing.T) {
-	testWrapper(t, testcases, testPrefix)
+	for tc := range testcases {
+		testWrapper(t, testcases[tc], testPrefix)
+	}
 }
 
 func TestLogMessage(t *testing.T) {
-	testWrapper(t, testcases, testMessage)
+	for tc := range testcases {
+		testWrapper(t, testcases[tc], testMessage)
+	}
 }
 
-func testLog(tc []testcase) {
-	for i := range tc {
-		tc := tc[i]
-		if tc.prefix == infoPrefix {
-			I.Print(tc.in)
-		} else if tc.prefix == errorPrefix {
-			E.Print(tc.in)
-		} else {
-			E.Printf("expected prefix %v or %v, but got prefix %v for log message %v", infoPrefix, errorPrefix, tc.prefix, tc.in)
-		}
+func testLog(tc testcase) {
+	if tc.prefix == infoPrefix {
+		I.Print(tc.in)
+	} else if tc.prefix == errorPrefix {
+		E.Print(tc.in)
+	} else {
+		E.Printf("expected prefix %v or %v, but got prefix %v for log message %v", infoPrefix, errorPrefix, tc.prefix, tc.in)
 	}
 }
 
