@@ -31,9 +31,7 @@ func TestEmpty(t *testing.T) {
 	if err := setEnv(""); err != nil {
 		t.Errorf("set empty env TS_LOGFILE failed: %v", err)
 	}
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
+	testLogAll(testcases)
 }
 
 func TestNotSet(t *testing.T) {
@@ -41,45 +39,35 @@ func TestNotSet(t *testing.T) {
 		t.Errorf("unset env TS_LOGFILE failed: %v", err)
 	}
 	Reset()
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
+	testLogAll(testcases)
 }
 
 func TestDirectory1(t *testing.T) {
 	if err := setEnv("/tmp/"); err != nil {
 		t.Errorf("set env TS_LOGFILE = /tmp/ failed: %v", err)
 	}
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
+	testLogAll(testcases)
 }
 
 func TestDirectory2(t *testing.T) {
 	if err := setEnv("/tmp"); err != nil {
 		t.Errorf("set env TS_LOGFILE = /tmp failed: %v", err)
 	}
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
+	testLogAll(testcases)
 }
 
 func TestStdout(t *testing.T) {
 	if err := setEnv("stdout"); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
+	testLogAll(testcases)
 }
 
 func TestDiscard(t *testing.T) {
 	if err := setEnv("discard"); err != nil {
 		t.Errorf("set env TS_LOGFILE = discard failed: %v", err)
 	}
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
+	testLogAll(testcases)
 }
 
 func TestInit(t *testing.T) {
@@ -88,13 +76,11 @@ func TestInit(t *testing.T) {
 	}
 }
 
-func BenchmarkInfoLog(b *testing.B) {
+func BenchmarkLog(b *testing.B) {
 	tmpLog(b).Close()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		for tc := range testcases {
-			testLog(testcases[tc])
-		}
+		testLogAll(testcases)
 	}
 }
 
@@ -223,6 +209,12 @@ func testLog(tc testcase) {
 		E.Print(tc.in)
 	} else {
 		E.Printf("expected prefix %v or %v, but got prefix %v for log message %v", infoPrefix, errorPrefix, tc.prefix, tc.in)
+	}
+}
+
+func testLogAll(tc []testcase) {
+	for i := range tc {
+		testLog(tc[i])
 	}
 }
 
