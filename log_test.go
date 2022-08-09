@@ -57,14 +57,21 @@ func TestDirectory2(t *testing.T) {
 }
 
 func TestStdout(t *testing.T) {
-	if err := setEnv("stdout"); err != nil {
+	if err := setEnv(stdoutLogger); err != nil {
+		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
+	}
+	testLogAll(testcases)
+}
+
+func TestTmp(t *testing.T) {
+	if err := setEnv(tmpLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
 	testLogAll(testcases)
 }
 
 func TestDiscard(t *testing.T) {
-	if err := setEnv("discard"); err != nil {
+	if err := setEnv(discardLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = discard failed: %v", err)
 	}
 	testLogAll(testcases)

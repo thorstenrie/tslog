@@ -32,6 +32,13 @@ const (
 	errorPrefix string = "ERROR: " // error prefix
 )
 
+// Strings for special loggers.
+const (
+	stdoutLogger  string = "stdout"  // Stdout
+	discardLogger string = "discard" // discard, no logging
+	tmpLogger     string = "tmp"     // temporary file
+)
+
 // init calls Reset to initialize global loggers.
 func init() {
 	Reset()
@@ -68,13 +75,13 @@ func setLog() error {
 	}
 
 	// handle "discard" and return
-	if filename == "discard" {
+	if filename == discardLogger {
 		noLogger()
 		return nil
 	}
 
 	// handle "stdout" and return
-	if filename == "stdout" {
+	if filename == stdoutLogger {
 		setStdout()
 		return nil
 	}
@@ -86,7 +93,7 @@ func setLog() error {
 	)
 
 	// set file
-	if filename == "tmp" {
+	if filename == tmpLogger {
 		f, err = os.CreateTemp(os.TempDir(), "tslog_*")
 	} else {
 		f, err = os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
