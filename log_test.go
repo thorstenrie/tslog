@@ -1,102 +1,152 @@
 package tslog
 
+// Import standard library packages.
 import (
-	"io"
-	"os"
-	"testing"
-	"time"
+	"io"      // io
+	"os"      // os
+	"testing" // testing
+	"time"    // time
 )
 
+// A testcase serves input data for tests. Prefix and in are defined separately.
+// For valid prefixes, global constants infoPrefix and errorPrefix can be used.
+type testcase struct {
+	prefix, in string
+}
+
+// A testcheck holds an actual output log message and the wanted result
+type testcheck struct {
+	in   string   // actual output log message
+	want testcase // wanted result (normally the input testcase)
+}
+
+// A testingtype interface implements Errorf for T, B and F
+// The interface enables generic functions for all test types T, B and F
+type testingtype interface {
+	*testing.T | *testing.B | *testing.F
+	Errorf(format string, a ...any)
+}
+
+// A testfunc is a function testing different dimensions of a testcheck.
+type testfunc func(*testing.T, *testcheck)
+
+// Slice of testcases.
 var (
 	testcases = []testcase{
 		{errorPrefix, "test"},
 		{infoPrefix, " "},
 		{errorPrefix, "Hello World!"},
 		{infoPrefix, "!12345"},
+		{errorPrefix, "\n"},
 	}
 )
 
-type testcase struct {
-	prefix, in string
-}
-
-type testStruct struct {
-	in   string
-	want testcase
-}
-
-type testFunc func(*testing.T, *testStruct)
-
+// TestEmpty performs logging with the env variable TS_LOGFILE set empty.
+// Expected result is fallback logging to Stdout.
 func TestEmpty(t *testing.T) {
+	// Set env variable TS_LOGFILE to an empty string
 	if err := setEnv(""); err != nil {
 		t.Errorf("set empty env TS_LOGFILE failed: %v", err)
 	}
+	// Reconfigure logging
+	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestNotSet performs logging with the env variable TS_LOGFILE being unset.
+// Expected result is fallback logging to Stdout.
 func TestNotSet(t *testing.T) {
+	// Unset env variable TS_LOGFILE
 	if err := os.Unsetenv("TS_LOGFILE"); err != nil {
 		t.Errorf("unset env TS_LOGFILE failed: %v", err)
 	}
+	// Reconfigure logging
 	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestDirectory1 performs logging with the env variable TS_LOGFILE set to a directory.
+// Expected result is fallback logging to Stdout.
 func TestDirectory1(t *testing.T) {
-	if err := setEnv("/tmp/"); err != nil {
+	// Set env variable TS_LOGFILE to temp directory
+	if err := setEnv(os.TempDir()); err != nil {
 		t.Errorf("set env TS_LOGFILE = /tmp/ failed: %v", err)
 	}
+	// Reconfigure logging
+	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestDirectory2 performs logging with the env variable TS_LOGFILE set to a directory.
+// Expected result is fallback logging to Stdout.
 func TestDirectory2(t *testing.T) {
-	if err := setEnv("/tmp"); err != nil {
-		t.Errorf("set env TS_LOGFILE = /tmp failed: %v", err)
+	// Set env variable TS_LOGFILE to temp directory plus /
+	if err := setEnv(os.TempDir() + string(os.PathSeparator)); err != nil {
+		t.Errorf("set env TS_LOGFILE = %v failed: %v", os.TempDir(), err)
 	}
+	// Reconfigure logging
+	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestStdout performs logging with the env variable TS_LOGFILE set to stdout.
+// Expected result is logging to Stdout.
 func TestStdout(t *testing.T) {
+	// Set env variable TS_LOGFILE to stdout
 	if err := setEnv(stdoutLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
+	// Reconfigure logging
+	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestTmp performs logging with the env variable TS_LOGFILE set to stdout.
+// Expected result is logging to a temp file in the temp directory.
 func TestTmp(t *testing.T) {
+	// Set env variable TS_LOGFILE to tmp
 	if err := setEnv(tmpLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
+	// Reconfigure logging
+	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestDiscard performs logging with the env variable TS_LOGFILE set to discard.
+// Expected result is no logging.
 func TestDiscard(t *testing.T) {
+	// Set env variable TS_LOGFILE to discard
 	if err := setEnv(discardLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = discard failed: %v", err)
 	}
+	// Reconfigure logging
+	Reset()
+	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
-func TestInit(t *testing.T) {
-	for tc := range testcases {
-		testLog(testcases[tc])
-	}
-}
-
+// BenchmarkLog performs a benchmark logging into a temp file in temp directory.
 func BenchmarkLog(b *testing.B) {
+	// Create temp file, set env variable and close the file
 	tmpLog(b).Close()
+	// Reconfigure logging
+	Reset()
+	// Reset benchmark timer
 	b.ResetTimer()
+	// Run benchmark with all testcases in each iteration
 	for i := 0; i < b.N; i++ {
 		testLogAll(testcases)
 	}
 }
 
-type testingType interface {
-	*testing.T | *testing.B | *testing.F
-	Errorf(format string, a ...any)
-}
-
-func tmpLog[T testingType](tt T) *os.File {
+func tmpLog[T testingtype](tt T) *os.File {
 	f, err := os.CreateTemp(os.TempDir(), "tslog_test_*")
 	if err != nil {
 		f.Close()
@@ -121,7 +171,7 @@ func FuzzInfo(f *testing.F) {
 	})
 }
 
-func testWrapper(t *testing.T, tc testcase, tf testFunc) {
+func testWrapper(t *testing.T, tc testcase, tf testfunc) {
 	f := tmpLog(t)
 	testLog(tc)
 	var want testcase
@@ -130,13 +180,13 @@ func testWrapper(t *testing.T, tc testcase, tf testFunc) {
 		t.Errorf("open %v failed: %v", f.Name(), err)
 		return
 	}
-	tf(t, &testStruct{in: string(in), want: want})
+	tf(t, &testcheck{in: string(in), want: want})
 	if err := f.Close(); err != nil {
 		t.Errorf("closing %v failed: %v", f.Name(), err)
 	}
 }
 
-func testLength(t *testing.T, tc *testStruct) {
+func testLength(t *testing.T, tc *testcheck) {
 	if t == nil {
 		E.Fatalln("nil pointer")
 	}
@@ -151,7 +201,7 @@ func testLength(t *testing.T, tc *testStruct) {
 	}
 }
 
-func testPrefix(t *testing.T, tc *testStruct) {
+func testPrefix(t *testing.T, tc *testcheck) {
 	if t == nil {
 		E.Fatalln("nil pointer")
 	}
@@ -171,7 +221,7 @@ func testPrefix(t *testing.T, tc *testStruct) {
 	}
 }
 
-func testMessage(t *testing.T, tc *testStruct) {
+func testMessage(t *testing.T, tc *testcheck) {
 	if t == nil {
 		E.Fatalln("nil pointer")
 	}
