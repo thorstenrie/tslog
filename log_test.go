@@ -14,17 +14,18 @@ type testcase struct {
 	prefix, in string
 }
 
-// A testcheck holds an actual output log message and the wanted result
+// A testcheck holds an actual output log message and the wanted result.
 type testcheck struct {
 	in   string   // actual output log message
 	want testcase // wanted result (normally the input testcase)
 }
 
-// A testingtype interface implements Errorf for T, B and F
-// The interface enables generic functions for all test types T, B and F
+// A testingtype interface implements Errorf for T, B and F.
+// The interface enables generic functions for all test types T, B and F.
 type testingtype interface {
 	*testing.T | *testing.B | *testing.F
 	Errorf(format string, a ...any)
+	Fatalf(format string, a ...any)
 }
 
 // A testfunc is a function testing different dimensions of a testcheck.
@@ -45,9 +46,7 @@ var (
 // Expected result is fallback logging to Stdout.
 func TestEmpty(t *testing.T) {
 	// Set env variable TS_LOGFILE to an empty string and reconfigure logging
-	if err := setEnv(""); err != nil {
-		t.Errorf("set empty env TS_LOGFILE failed: %v", err)
-	}
+	setEnv(t, "")
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -57,10 +56,10 @@ func TestEmpty(t *testing.T) {
 func TestNotSet(t *testing.T) {
 	// Unset env variable TS_LOGFILE
 	if err := os.Unsetenv("TS_LOGFILE"); err != nil {
-		t.Errorf("unset env TS_LOGFILE failed: %v", err)
+		t.Fatalf("unset env TS_LOGFILE failed: %v", err)
 	}
-	// Reconfigure logging
-	Reset()
+	// Re-initialize logging
+	initialize()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -68,10 +67,8 @@ func TestNotSet(t *testing.T) {
 // TestDirectory1 performs logging with the env variable TS_LOGFILE set to a directory.
 // Expected result is fallback logging to Stdout.
 func TestDirectory1(t *testing.T) {
-	// Set env variable TS_LOGFILE to temp directory and reconfigure logging
-	if err := setEnv(os.TempDir()); err != nil {
-		t.Errorf("set env TS_LOGFILE = /tmp/ failed: %v", err)
-	}
+	// Set env variable TS_LOGFILE to temp directory and re-initialize logging
+	setEnv(t, os.TempDir())
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -79,10 +76,8 @@ func TestDirectory1(t *testing.T) {
 // TestDirectory2 performs logging with the env variable TS_LOGFILE set to a directory.
 // Expected result is fallback logging to Stdout.
 func TestDirectory2(t *testing.T) {
-	// Set env variable TS_LOGFILE to temp directory plus / and reconfigure logging
-	if err := setEnv(os.TempDir() + string(os.PathSeparator)); err != nil {
-		t.Errorf("set env TS_LOGFILE = %v failed: %v", os.TempDir(), err)
-	}
+	// Set env variable TS_LOGFILE to temp directory plus / and re-initialize logging
+	setEnv(t, os.TempDir()+string(os.PathSeparator))
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -90,10 +85,8 @@ func TestDirectory2(t *testing.T) {
 // TestStdout performs logging with the env variable TS_LOGFILE set to stdout.
 // Expected result is logging to Stdout.
 func TestStdout(t *testing.T) {
-	// Set env variable TS_LOGFILE to stdout and reconfigure logging
-	if err := setEnv(stdoutLogger); err != nil {
-		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
-	}
+	// Set env variable TS_LOGFILE to stdout and re-initialize logging
+	setEnv(t, stdoutLogger)
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -101,10 +94,8 @@ func TestStdout(t *testing.T) {
 // TestTmp performs logging with the env variable TS_LOGFILE set to stdout.
 // Expected result is logging to a temp file in the temp directory.
 func TestTmp(t *testing.T) {
-	// Set env variable TS_LOGFILE to tmp and reconfigure logging
-	if err := setEnv(tmpLogger); err != nil {
-		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
-	}
+	// Set env variable TS_LOGFILE to tmp and re-initialize logging
+	setEnv(t, tmpLogger)
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -112,10 +103,8 @@ func TestTmp(t *testing.T) {
 // TestDiscard performs logging with the env variable TS_LOGFILE set to discard.
 // Expected result is no logging.
 func TestDiscard(t *testing.T) {
-	// Set env variable TS_LOGFILE to discard and reconfigure logging
-	if err := setEnv(discardLogger); err != nil {
-		t.Errorf("set env TS_LOGFILE = discard failed: %v", err)
-	}
+	// Set env variable TS_LOGFILE to discard and re-initialize logging
+	setEnv(t, discardLogger)
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -191,10 +180,8 @@ func tmpLog[T testingtype](tt T) *os.File {
 		tt.Errorf("creating %v failed: %v", f.Name(), err)
 		return os.Stdout
 	}
-	// Set TS_LOGFILE to temp log file tslog_test_* and reconfigure logging
-	if err := setEnv(f.Name()); err != nil {
-		tt.Errorf("set env TS_LOGFILE = %v failed: %v", f.Name(), err)
-	}
+	// Set TS_LOGFILE to temp log file tslog_test_* and re-initialize logging
+	setEnv(tt, f.Name())
 	// Return temp log file tslog_test_*
 	return f
 }
@@ -319,9 +306,10 @@ func testLogAll(tc []testcase) {
 	}
 }
 
-// setEnv sets env variable TS_LOGFILE to fn
-func setEnv(fn string) error {
-	err := os.Setenv("TS_LOGFILE", fn)
-	Reset()
-	return err
+// setEnv sets env variable TS_LOGFILE to fn and re-initialize loggers.
+func setEnv[T testingtype](tt T, fn string) {
+	if err := os.Setenv("TS_LOGFILE", fn); err != nil {
+		tt.Fatalf("setting env variable TS_LOGFILE to %v failed: %v", fn, err)
+	}
+	initialize()
 }

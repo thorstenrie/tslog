@@ -1,9 +1,9 @@
-// Package tslog implements easy-to-use logging that tries to keep it simple.
+// Package tslog implements logging that tries to keep it simple.
 //
 // The tslog package provides one log.Logger for informational logging (I) and one
 // log.Logger for error logging (E). Both log.Logger write into the configured
 // io.Writer (a file, a tmp file, Stdout or discard). The io.Writer is configured
-// using the environment variable "TS_LOGFILE"
+// using the environment variable "TS_LOGFILE" during the initial startup of the app.
 //
 // Set TS_LOGFILE to
 // 'stdout' for logging to Stdout (default)
@@ -39,15 +39,14 @@ const (
 	tmpLogger     string = "tmp"     // temporary file
 )
 
-// init calls Reset to initialize global loggers.
+// init initializes global loggers.
 func init() {
-	Reset()
+	initialize()
 }
 
-// Reset sets global loggers according to env variable TS_LOGFILE.
-//
+// initialize sets global loggers according to env variable TS_LOGFILE.
 // On error, the function falls back to Stdout.
-func Reset() {
+func initialize() {
 	if err := setLog(); err != nil {
 		setStdout()
 		E.Printf("%v; switching log to stdout", err)
