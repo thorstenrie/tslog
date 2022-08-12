@@ -44,12 +44,10 @@ var (
 // TestEmpty performs logging with the env variable TS_LOGFILE set empty.
 // Expected result is fallback logging to Stdout.
 func TestEmpty(t *testing.T) {
-	// Set env variable TS_LOGFILE to an empty string
+	// Set env variable TS_LOGFILE to an empty string and reconfigure logging
 	if err := setEnv(""); err != nil {
 		t.Errorf("set empty env TS_LOGFILE failed: %v", err)
 	}
-	// Reconfigure logging
-	Reset()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -70,12 +68,10 @@ func TestNotSet(t *testing.T) {
 // TestDirectory1 performs logging with the env variable TS_LOGFILE set to a directory.
 // Expected result is fallback logging to Stdout.
 func TestDirectory1(t *testing.T) {
-	// Set env variable TS_LOGFILE to temp directory
+	// Set env variable TS_LOGFILE to temp directory and reconfigure logging
 	if err := setEnv(os.TempDir()); err != nil {
 		t.Errorf("set env TS_LOGFILE = /tmp/ failed: %v", err)
 	}
-	// Reconfigure logging
-	Reset()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -83,12 +79,10 @@ func TestDirectory1(t *testing.T) {
 // TestDirectory2 performs logging with the env variable TS_LOGFILE set to a directory.
 // Expected result is fallback logging to Stdout.
 func TestDirectory2(t *testing.T) {
-	// Set env variable TS_LOGFILE to temp directory plus /
+	// Set env variable TS_LOGFILE to temp directory plus / and reconfigure logging
 	if err := setEnv(os.TempDir() + string(os.PathSeparator)); err != nil {
 		t.Errorf("set env TS_LOGFILE = %v failed: %v", os.TempDir(), err)
 	}
-	// Reconfigure logging
-	Reset()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -96,12 +90,10 @@ func TestDirectory2(t *testing.T) {
 // TestStdout performs logging with the env variable TS_LOGFILE set to stdout.
 // Expected result is logging to Stdout.
 func TestStdout(t *testing.T) {
-	// Set env variable TS_LOGFILE to stdout
+	// Set env variable TS_LOGFILE to stdout and reconfigure logging
 	if err := setEnv(stdoutLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
-	// Reconfigure logging
-	Reset()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -109,12 +101,10 @@ func TestStdout(t *testing.T) {
 // TestTmp performs logging with the env variable TS_LOGFILE set to stdout.
 // Expected result is logging to a temp file in the temp directory.
 func TestTmp(t *testing.T) {
-	// Set env variable TS_LOGFILE to tmp
+	// Set env variable TS_LOGFILE to tmp and reconfigure logging
 	if err := setEnv(tmpLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = stdout failed: %v", err)
 	}
-	// Reconfigure logging
-	Reset()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
@@ -122,22 +112,43 @@ func TestTmp(t *testing.T) {
 // TestDiscard performs logging with the env variable TS_LOGFILE set to discard.
 // Expected result is no logging.
 func TestDiscard(t *testing.T) {
-	// Set env variable TS_LOGFILE to discard
+	// Set env variable TS_LOGFILE to discard and reconfigure logging
 	if err := setEnv(discardLogger); err != nil {
 		t.Errorf("set env TS_LOGFILE = discard failed: %v", err)
 	}
-	// Reconfigure logging
-	Reset()
 	// Perform logging of testcases
 	testLogAll(testcases)
 }
 
+// TestLogLength checks the length of all testcases in the log file.
+// Since log.Lshortfile is not securly known during runtime, it only
+// checks for the minimal length without log.Lshortfile.
+// Note: Hard-coding log.Lshortfile in test functions would break
+// tests if the source filename is changed
+func TestLogLength(t *testing.T) {
+	for tc := range testcases {
+		testWrapper(t, testcases[tc], testLength)
+	}
+}
+
+// TestLogPrefix checks the prefix of all testcases in the log file.
+func TestLogPrefix(t *testing.T) {
+	for tc := range testcases {
+		testWrapper(t, testcases[tc], testPrefix)
+	}
+}
+
+// TestLogMessage checks the contents of all testcases in the log file.
+func TestLogMessage(t *testing.T) {
+	for tc := range testcases {
+		testWrapper(t, testcases[tc], testMessage)
+	}
+}
+
 // BenchmarkLog performs a benchmark logging into a temp file in temp directory.
 func BenchmarkLog(b *testing.B) {
-	// Create temp file, set env variable and close the file
+	// Create temp file, set env variable, close the file and reconfigure logging
 	tmpLog(b).Close()
-	// Reconfigure logging
-	Reset()
 	// Reset benchmark timer
 	b.ResetTimer()
 	// Run benchmark with all testcases in each iteration
@@ -180,7 +191,7 @@ func tmpLog[T testingtype](tt T) *os.File {
 		tt.Errorf("creating %v failed: %v", f.Name(), err)
 		return os.Stdout
 	}
-	// Set TS_LOGFILE to temp log file tslog_test_*
+	// Set TS_LOGFILE to temp log file tslog_test_* and reconfigure logging
 	if err := setEnv(f.Name()); err != nil {
 		tt.Errorf("set env TS_LOGFILE = %v failed: %v", f.Name(), err)
 	}
@@ -191,7 +202,7 @@ func tmpLog[T testingtype](tt T) *os.File {
 // testWrapper logs a testcase into a temp file and checks the
 // result with tf.
 func testWrapper(t *testing.T, tc testcase, tf testfunc) {
-	// Create temp file and set env variable
+	// Create temp file, set env variable and reconfigure logging
 	f := tmpLog(t)
 	// Log testcase
 	testLog(tc)
@@ -211,6 +222,10 @@ func testWrapper(t *testing.T, tc testcase, tf testfunc) {
 	}
 }
 
+// testLength checks the length of a log message.
+// The minimum expected length of the log message is compared to
+// the actual length of the log message.
+// testLength implements testfunc.
 func testLength(t *testing.T, tc *testcheck) {
 	if t == nil {
 		E.Fatalln("nil pointer")
@@ -219,13 +234,24 @@ func testLength(t *testing.T, tc *testcheck) {
 		t.Errorf("nil pointer")
 		return
 	}
-	minl := len(tc.want.prefix) + len(tc.want.in) + len(time.Now().Format("2009/01/23 01:23:23")) + 2 /*spaces*/ + 2 /*colons*/
+	// Calculates minimum length
+	// Note: length of log.Lshortfile not known
+	minl := len(tc.want.prefix) +
+		len(tc.want.in) +
+		len(time.Now().Format("2009/01/23 01:23:23")) +
+		2 /*spaces*/ +
+		2 /*colons*/
+	// Get actual length of log message
 	actl := len(tc.in)
+	// Error in case actual length is lower than the calculated minimum length
 	if actl < minl {
 		t.Errorf("minimum length %d expected, but length is %d", minl, actl)
 	}
 }
 
+// testPrefix checks the prefix of a log message
+// The expected prefix is compared to the actual prefix.
+// testPrefix implements testfunc.
 func testPrefix(t *testing.T, tc *testcheck) {
 	if t == nil {
 		E.Fatalln("nil pointer")
@@ -234,18 +260,24 @@ func testPrefix(t *testing.T, tc *testcheck) {
 		t.Errorf("nil pointer")
 		return
 	}
+	// Check if the actual log message length is at least the prefix length
 	minl := len(tc.want.prefix)
 	actl := len(tc.in)
 	if actl < minl {
 		t.Errorf("log message length %d shorter than length %d of prefix %v", actl, minl, tc.want.prefix)
 		return
 	}
+	// Get the actual prefix of the log message
 	actp := tc.in[0:minl]
+	// Error in case the actual prefix does not match the expected prefix
 	if actp != tc.want.prefix {
 		t.Errorf("expected prefix %v but got %v", tc.want.prefix, actp)
 	}
 }
 
+// testMessage checks the contents of a log message.
+// The expected contents is compared to the actual log message.
+// testMessage implements testfunc.
 func testMessage(t *testing.T, tc *testcheck) {
 	if t == nil {
 		E.Fatalln("nil pointer")
@@ -254,36 +286,22 @@ func testMessage(t *testing.T, tc *testcheck) {
 		t.Errorf("nil pointer")
 		return
 	}
+	// Check if the actual log message length is at least the expected contents length
 	minl := len(tc.want.in)
 	actl := len(tc.in)
 	if actl < minl {
 		t.Errorf("log message length %d shorter than length %d of message %v", actl, minl, tc.want.in)
 		return
 	}
+	// Get the actual log message without prefix and flags
 	actm := tc.in[len(tc.in)-minl:]
+	// Error in case the actual log message does not match the expected contents
 	if actm != tc.want.in {
 		t.Errorf("expected log message %v but got %v", tc.want.in, actm)
 	}
 }
 
-func TestLogLength(t *testing.T) {
-	for tc := range testcases {
-		testWrapper(t, testcases[tc], testLength)
-	}
-}
-
-func TestLogPrefix(t *testing.T) {
-	for tc := range testcases {
-		testWrapper(t, testcases[tc], testPrefix)
-	}
-}
-
-func TestLogMessage(t *testing.T) {
-	for tc := range testcases {
-		testWrapper(t, testcases[tc], testMessage)
-	}
-}
-
+// testLog logs the testcase into the log file.
 func testLog(tc testcase) {
 	if tc.prefix == infoPrefix {
 		I.Print(tc.in)
@@ -294,12 +312,14 @@ func testLog(tc testcase) {
 	}
 }
 
+// testLogAll logs all testcases into the log file.
 func testLogAll(tc []testcase) {
 	for i := range tc {
 		testLog(tc[i])
 	}
 }
 
+// setEnv sets env variable TS_LOGFILE to fn
 func setEnv(fn string) error {
 	err := os.Setenv("TS_LOGFILE", fn)
 	Reset()
