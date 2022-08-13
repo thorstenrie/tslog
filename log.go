@@ -10,6 +10,10 @@
 // 'discard' for no logging
 // 'tmp' for logging to tslog_* in temporary directory
 // <filename> for logging to <filename>
+//
+// Copyright (c) 2022 thorstenrie
+// All Rights Reserved. Use is governed with GNU Affero General Public License v3.0
+// that can be found in the LICENSE file.
 package tslog
 
 // Import standard library packages.
@@ -49,7 +53,7 @@ func init() {
 func initialize() {
 	if err := setLog(); err != nil {
 		setStdout()
-		E.Printf("%v; switching log to stdout", err)
+		I.Printf("%v; using default log stdout", err)
 	}
 }
 
