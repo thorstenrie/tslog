@@ -13,6 +13,7 @@
 ## Usage
 
 Before app execution, set the environment variable `TS_LOGFILE`to your logging target (see [Configuration](#Configuration)).
+
 E.g., in a linux terminal run
 
 ```
