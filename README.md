@@ -36,8 +36,8 @@ The [global informational logger and error logger](https://pkg.go.dev/github.com
 
 E.g.,
 ```
-tslog.I.Println("Hello World!")
-tslog.E.Println("Hello Error!")
+tslog.I.Println("Hello World!") // info
+tslog.E.Println("Hello Error!") // error
 ```
 
 ## Configuration
