@@ -1,7 +1,19 @@
 # tslog
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/thorstenrie/tslog)](https://goreportcard.com/report/github.com/thorstenrie/tslog)
+[![CodeFactor](https://www.codefactor.io/repository/github/thorstenrie/tslog/badge)](https://www.codefactor.io/repository/github/thorstenrie/tslog)
+![OSS Lifecycle](https://img.shields.io/osslifecycle/thorstenrie/tslog)
+
 [![PkgGoDev](https://pkg.go.dev/badge/mod/github.com/thorstenrie/tslog)](https://pkg.go.dev/mod/github.com/thorstenrie/tslog)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/thorstenrie/tslog)
+![Libraries.io dependency status for GitHub repo](https://img.shields.io/librariesio/github/thorstenrie/tslog)
+
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/thorstenrie/tslog)
+![GitHub last commit](https://img.shields.io/github/last-commit/thorstenrie/tslog)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/thorstenrie/tslog)
+![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/thorstenrie/tslog)
+![GitHub Top Language](https://img.shields.io/github/languages/top/thorstenrie/tslog)
+![GitHub](https://img.shields.io/github/license/thorstenrie/tslog)
 
 [Go](https://go.dev/) package for logging that tries to keep it simple ([KISS principle](https://en.wikipedia.org/wiki/KISS_principle)).
 
