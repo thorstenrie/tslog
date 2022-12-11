@@ -22,6 +22,9 @@ import (
 	"io"  // io
 	"log" // log
 	"os"  // os
+
+	"github.com/thorstenrie/tserr" // tserr
+	"github.com/thorstenrie/tsfio" // tsfio
 )
 
 // Global informational logger and error logger provided.
@@ -66,11 +69,11 @@ func setLog() error {
 	// error handling
 	// return error, if not set
 	if !isset {
-		return fmt.Errorf("env variable $TS_LOGFILE not set")
+		return tserr.NotSet("env variable $TS_LOGFILE")
 	}
 	// return error if empty
 	if filename == "" {
-		return fmt.Errorf("empty name in $TS_LOGFILE")
+		return tserr.Empty("env variable $TS_LOGFILE")
 	}
 	// return error if directory
 	if l := filename[len(filename)-1:]; (l == "/") || (l == "\\") {
@@ -98,14 +101,14 @@ func setLog() error {
 	// set file
 	if filename == tmpLogger {
 		f, err = os.CreateTemp(os.TempDir(), "tslog_*")
+		if err != nil {
+			return tserr.Op(&tserr.OpArgs{Op: "create temp file", Fn: "tslog_*", Err: err})
+		}
 	} else {
-		f, err = os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	}
-
-	// handle file errors
-	if err != nil {
-		f.Close()
-		return fmt.Errorf("log file: %w; $TS_SSL_LOGFILE = %v", err, filename)
+		f, err = tsfio.OpenFile(tsfio.Filename(filename))
+		if err != nil {
+			return tserr.Op(&tserr.OpArgs{Op: "open file", Fn: filename, Err: err})
+		}
 	}
 
 	// activate file logging and return
@@ -116,7 +119,7 @@ func setLog() error {
 // setLogger initializes global loggers with f.
 func setLogger(f *os.File) {
 	if f == nil {
-		panic(fmt.Errorf("nil pointer"))
+		panic(tserr.NilPtr())
 	}
 	var flags int = log.Ldate | log.Ltime | log.Lshortfile
 	I = log.New(f, infoPrefix, flags)
