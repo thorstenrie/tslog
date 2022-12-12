@@ -18,7 +18,7 @@ package tslog
 
 // Import standard library packages.
 import (
-	"fmt" // fmt
+	// fmt
 	"io"  // io
 	"log" // log
 	"os"  // os
@@ -46,6 +46,11 @@ const (
 	tmpLogger     string = "tmp"     // temporary file
 )
 
+// Flags for logging properties
+const (
+	flags int = log.Ldate | log.Ltime | log.Lshortfile
+)
+
 // init initializes global loggers.
 func init() {
 	initialize()
@@ -64,66 +69,72 @@ func initialize() {
 func setLog() error {
 
 	// read env variable TS_LOGFILE
-	filename, isset := os.LookupEnv("TS_LOGFILE")
+	fn, isset := os.LookupEnv("TS_LOGFILE")
 
 	// error handling
 	// return error, if not set
 	if !isset {
 		return tserr.NotSet("env variable $TS_LOGFILE")
 	}
-	// return error if empty
-	if filename == "" {
-		return tserr.Empty("env variable $TS_LOGFILE")
-	}
-	// return error if directory
-	if l := filename[len(filename)-1:]; (l == "/") || (l == "\\") {
-		return fmt.Errorf("no file, but only directory in $TS_LOGFILE = %v", filename)
-	}
 
-	// handle "discard" and return
-	if filename == discardLogger {
+	// Handle special loggers
+	switch fn {
+	case discardLogger:
+		// discard, no logging
 		noLogger()
+		// Return nil
 		return nil
-	}
-
-	// handle "stdout" and return
-	if filename == stdoutLogger {
+	case stdoutLogger:
+		// Logging to stdout
 		setStdout()
+		// Return nil
 		return nil
-	}
-
-	// file ptr and error
-	var (
-		f   *os.File
-		err error
-	)
-
-	// set file
-	if filename == tmpLogger {
-		f, err = os.CreateTemp(os.TempDir(), "tslog_*")
+	case tmpLogger:
+		// Create temporary file for logging
+		f, err := os.CreateTemp(os.TempDir(), "tslog_*")
+		// If it fails, return an error
 		if err != nil {
 			return tserr.Op(&tserr.OpArgs{Op: "create temp file", Fn: "tslog_*", Err: err})
 		}
-	} else {
-		f, err = tsfio.OpenFile(tsfio.Filename(filename))
-		if err != nil {
-			return tserr.Op(&tserr.OpArgs{Op: "open file", Fn: filename, Err: err})
-		}
+		// Activate file logging
+		setLogger(f)
+		// Return nil
+		return nil
 	}
 
-	// activate file logging and return
+	// Use type tsfio.Filename
+	filename := tsfio.Filename(fn)
+
+	// Check filename using tsfio.CheckFile
+	if err := tsfio.CheckFile(filename); err != nil {
+		// If the check fails, return an error
+		return tserr.Check(&tserr.CheckArgs{F: string(filename), Err: err})
+	}
+
+	// Set file
+	f, e := tsfio.OpenFile(tsfio.Filename(filename))
+	// If OpenFile fails, return an error
+	if e != nil {
+		return tserr.Op(&tserr.OpArgs{Op: "open file", Fn: string(filename), Err: e})
+	}
+
+	// Activate file logging
 	setLogger(f)
+
+	// Return nil
 	return nil
 }
 
 // setLogger initializes global loggers with f.
 func setLogger(f *os.File) {
 	if f == nil {
-		panic(tserr.NilPtr())
+		// If f is nil, fall back to logging to Stdout
+		f = os.Stdout
 	}
-	var flags int = log.Ldate | log.Ltime | log.Lshortfile
+	// Set loggers I and E to f
 	I = log.New(f, infoPrefix, flags)
 	E = log.New(f, errorPrefix, flags)
+
 }
 
 // setStdout set global loggers to Stdout.
