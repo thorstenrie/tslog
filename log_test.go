@@ -31,8 +31,6 @@ type testingtype interface {
 	*testing.T | *testing.B | *testing.F
 	Error(a ...any)
 	Fatal(a ...any)
-	Errorf(format string, a ...any)
-	Fatalf(format string, a ...any)
 }
 
 // A testfunc is a function testing different dimensions of a testcheck.
@@ -144,18 +142,24 @@ func TestLogMessage(t *testing.T) {
 // BenchmarkLog performs a benchmark logging into a temp file in temp directory.
 func BenchmarkLog(b *testing.B) {
 	// Create temp file, set env variable, close the file and reconfigure logging
-	tmpLog(b).Close()
+	f := tmpLog(b)
+	fn := f.Name()
+	f.Close()
 	// Reset benchmark timer
 	b.ResetTimer()
 	// Run benchmark with all testcases in each iteration
 	for i := 0; i < b.N; i++ {
 		testLogAll(testcases)
 	}
+	// Remove file f
+	rm(b, fn)
 }
 
 // FuzzInfo conducts fuzzing on log messages and checks for
 // errors. The checks include the length of the log message,
 // the prefix and the correct logging of the fuzzed message.
+// Run fuzzing with go test -fuzz FuzzInfo
+// Warning: high number of file I/O
 func FuzzInfo(f *testing.F) {
 	// Addition of testcases to the seed corpus
 	for _, tc := range testcases {
@@ -193,11 +197,21 @@ func tmpLog[T testingtype](tt T) *os.File {
 	return f
 }
 
+// rm removes file named fn. In case of an error execution stops.
+func rm[T testingtype](tt T, fn string) {
+	// Remove file
+	if err := os.Remove(fn); err != nil {
+		// Stop execution in case of an error
+		tt.Fatal(tserr.Op(&tserr.OpArgs{Op: "Remove", Fn: fn, Err: err}))
+	}
+}
+
 // testWrapper logs a testcase into a temp file and checks the
 // result with tf.
 func testWrapper(t *testing.T, tc testcase, tf testfunc) {
 	// Create temp file, set env variable and reconfigure logging
 	f := tmpLog(t)
+	fn := f.Name()
 	// Log testcase
 	testLog(tc)
 
@@ -205,15 +219,16 @@ func testWrapper(t *testing.T, tc testcase, tf testfunc) {
 	// Read log file
 	in, err := io.ReadAll(f)
 	if err != nil {
-		t.Error(tserr.Op(&tserr.OpArgs{Op: "ReadAll", Fn: f.Name(), Err: err}))
-		return
+		t.Fatal(tserr.Op(&tserr.OpArgs{Op: "ReadAll", Fn: fn, Err: err}))
 	}
-	// Check log file with tf
-	tf(t, &testcheck{in: string(in), want: want})
 	// Close temp log file
 	if err := f.Close(); err != nil {
-		t.Error(tserr.Op(&tserr.OpArgs{Op: "Close", Fn: f.Name(), Err: err}))
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Close", Fn: fn, Err: err}))
 	}
+	// Remove file f
+	rm(t, fn)
+	// Check log file with tf
+	tf(t, &testcheck{in: string(in), want: want})
 }
 
 // testLength checks the length of a log message.
@@ -256,8 +271,7 @@ func testPrefix(t *testing.T, tc *testcheck) {
 	minl := len(tc.want.prefix)
 	actl := len(tc.in)
 	if actl < minl {
-		t.Errorf("log message length %d shorter than length %d of prefix %v", actl, minl, tc.want.prefix)
-		return
+		t.Fatal(tserr.Higher(&tserr.HigherArgs{Var: "log message length", Actual: int64(actl), LowerBound: int64(minl)}))
 	}
 	// Get the actual prefix of the log message
 	actp := tc.in[0:minl]
