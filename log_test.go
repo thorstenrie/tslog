@@ -9,6 +9,8 @@ import (
 	"os"      // os
 	"testing" // testing
 	"time"    // time
+
+	"github.com/thorstenrie/tserr" // tserr
 )
 
 // A testcase serves input data for tests. Prefix and in are defined separately.
@@ -27,6 +29,8 @@ type testcheck struct {
 // The interface enables generic functions for all test types T, B and F.
 type testingtype interface {
 	*testing.T | *testing.B | *testing.F
+	Error(a ...any)
+	Fatal(a ...any)
 	Errorf(format string, a ...any)
 	Fatalf(format string, a ...any)
 }
@@ -59,7 +63,7 @@ func TestEmpty(t *testing.T) {
 func TestNotSet(t *testing.T) {
 	// Unset env variable TS_LOGFILE
 	if err := os.Unsetenv("TS_LOGFILE"); err != nil {
-		t.Fatalf("unset env TS_LOGFILE failed: %v", err)
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "unset env", Fn: "TS_LOGFILE", Err: err}))
 	}
 	// Re-initialize logging
 	initialize()
@@ -180,7 +184,7 @@ func tmpLog[T testingtype](tt T) *os.File {
 	// In case of an error fall back to Stdout for logging
 	if err != nil {
 		f.Close()
-		tt.Errorf("creating %v failed: %v", f.Name(), err)
+		tt.Error(tserr.Op(&tserr.OpArgs{Op: "create", Fn: f.Name(), Err: err}))
 		return os.Stdout
 	}
 	// Set TS_LOGFILE to temp log file tslog_test_* and re-initialize logging
@@ -201,14 +205,14 @@ func testWrapper(t *testing.T, tc testcase, tf testfunc) {
 	// Read log file
 	in, err := io.ReadAll(f)
 	if err != nil {
-		t.Errorf("open %v failed: %v", f.Name(), err)
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "ReadAll", Fn: f.Name(), Err: err}))
 		return
 	}
 	// Check log file with tf
 	tf(t, &testcheck{in: string(in), want: want})
 	// Close temp log file
 	if err := f.Close(); err != nil {
-		t.Errorf("closing %v failed: %v", f.Name(), err)
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Close", Fn: f.Name(), Err: err}))
 	}
 }
 
@@ -218,11 +222,10 @@ func testWrapper(t *testing.T, tc testcase, tf testfunc) {
 // testLength implements testfunc.
 func testLength(t *testing.T, tc *testcheck) {
 	if t == nil {
-		E.Fatalln("nil pointer")
+		panic("nil pointer")
 	}
 	if tc == nil {
-		t.Errorf("nil pointer")
-		return
+		t.Fatal(tserr.NilPtr())
 	}
 	// Calculates minimum length
 	// Note: length of log.Lshortfile not known
@@ -235,7 +238,7 @@ func testLength(t *testing.T, tc *testcheck) {
 	actl := len(tc.in)
 	// Error in case actual length is lower than the calculated minimum length
 	if actl < minl {
-		t.Errorf("minimum length %d expected, but length is %d", minl, actl)
+		t.Error(tserr.Higher(&tserr.HigherArgs{Var: "length of log message", Actual: int64(actl), LowerBound: int64(minl)}))
 	}
 }
 
@@ -244,11 +247,10 @@ func testLength(t *testing.T, tc *testcheck) {
 // testPrefix implements testfunc.
 func testPrefix(t *testing.T, tc *testcheck) {
 	if t == nil {
-		E.Fatalln("nil pointer")
+		panic("nil pointer")
 	}
 	if tc == nil {
-		t.Errorf("nil pointer")
-		return
+		t.Fatal(tserr.NilPtr())
 	}
 	// Check if the actual log message length is at least the prefix length
 	minl := len(tc.want.prefix)
@@ -261,7 +263,7 @@ func testPrefix(t *testing.T, tc *testcheck) {
 	actp := tc.in[0:minl]
 	// Error in case the actual prefix does not match the expected prefix
 	if actp != tc.want.prefix {
-		t.Errorf("expected prefix %v but got %v", tc.want.prefix, actp)
+		t.Error(tserr.NotEqualStr(&tserr.NotEqualStrArgs{X: tc.want.prefix, Y: actp}))
 	}
 }
 
@@ -270,24 +272,22 @@ func testPrefix(t *testing.T, tc *testcheck) {
 // testMessage implements testfunc.
 func testMessage(t *testing.T, tc *testcheck) {
 	if t == nil {
-		E.Fatalln("nil pointer")
+		panic("nil pointer")
 	}
 	if tc == nil {
-		t.Errorf("nil pointer")
-		return
+		t.Fatal(tserr.NilPtr())
 	}
 	// Check if the actual log message length is at least the expected contents length
 	minl := len(tc.want.in)
 	actl := len(tc.in)
 	if actl < minl {
-		t.Errorf("log message length %d shorter than length %d of message %v", actl, minl, tc.want.in)
-		return
+		t.Fatal(tserr.Higher(&tserr.HigherArgs{Var: "length of log message", Actual: int64(actl), LowerBound: int64(minl)}))
 	}
 	// Get the actual log message without prefix and flags
 	actm := tc.in[len(tc.in)-minl:]
 	// Error in case the actual log message does not match the expected contents
 	if actm != tc.want.in {
-		t.Errorf("expected log message %v but got %v", tc.want.in, actm)
+		t.Error(tserr.NotEqualStr(&tserr.NotEqualStrArgs{X: tc.want.in, Y: actm}))
 	}
 }
 
@@ -312,7 +312,7 @@ func testLogAll(tc []testcase) {
 // setEnv sets env variable TS_LOGFILE to fn and re-initialize loggers.
 func setEnv[T testingtype](tt T, fn string) {
 	if err := os.Setenv("TS_LOGFILE", fn); err != nil {
-		tt.Fatalf("setting env variable TS_LOGFILE to %v failed: %v", fn, err)
+		tt.Fatal(tserr.Op(&tserr.OpArgs{Op: "set env", Fn: "TS_LOGFILE", Err: err}))
 	}
 	initialize()
 }
