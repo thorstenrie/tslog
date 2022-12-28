@@ -1,6 +1,6 @@
 module github.com/thorstenrie/tslog
 
-go 1.18
+go 1.19
 
 require (
 	github.com/thorstenrie/tserr v1.5.0
