@@ -1,149 +1,115 @@
 // Package tslog implements logging that tries to keep it simple.
 //
-// The tslog package provides one log.Logger for informational logging (I) and one
-// log.Logger for error logging (E). Both log.Logger write into the configured
-// io.Writer (a file, a tmp file, Stdout or discard). The io.Writer is configured
-// using the environment variable "TS_LOGFILE" during the initial startup of the app.
+// The tslog package is a logging interface in Go that tries to keep it simple.
+// It provides log levels Trace, Debug, Info, Warn, Error and Fatal.
+// The log messages are formatted in JSON format to enable parsing.
+// The predefined default logger is set to log to Stdout on Info level. A new
+// logger instance can be created with New(). The output of a logger can be set
+// to a specific file, a temporary file, to Stdout and to discard.
+// All function calls return an error, if any.
 //
-// Set TS_LOGFILE to
-// 'stdout' for logging to Stdout (default)
-// 'discard' for no logging
-// 'tmp' for logging to tslog_* in temporary directory
-// <filename> for logging to <filename>
-//
-// Copyright (c) 2022 thorstenrie
+// Copyright (c) 2023 thorstenrie
 // All Rights Reserved. Use is governed with GNU Affero General Public License v3.0
 // that can be found in the LICENSE file.
 package tslog
 
-// Import standard library packages.
+// Import tsfio.
 import (
-	// fmt
-	"io"  // io
-	"log" // log
-	"os"  // os
-
-	"github.com/thorstenrie/tserr" // tserr
 	"github.com/thorstenrie/tsfio" // tsfio
 )
 
-// Global informational logger and error logger provided.
+// Strings for special loggers
+const (
+	StdoutLogger  tsfio.Filename = tsfio.Filename("stdout")  // Stdout
+	DiscardLogger tsfio.Filename = tsfio.Filename("discard") // discard, no logging
+	TmpLogger     tsfio.Filename = tsfio.Filename("tmp")     // temporary file
+)
+
+// Enum for log levels.
+const (
+	// Trace: log the execution of code of the app
+	TraceLevel int = 1
+	// Debug: log detailed events for debugging of the app
+	DebugLevel int = 2
+	// Info: log an event under normal conditions of the app
+	InfoLevel int = 3
+	// Warn: log an unintended event, which is tried to be recovered and potentially
+	// impacting execution of the app
+	WarnLevel int = 4
+	// Error: log an unexpected event with at least one function of the app being not operable
+	ErrorLevel int = 5
+	// Fatal: log an unexpected critical event forcing a shutdown of the app
+	FatalLevel int = 6
+)
+
+// Defaults for logging
+const (
+	// Layout for timestamp in the log message
+	timeLayout string = "2006-01-02 15:04:05 -0700 MST"
+	// Root element for JSON format
+	defaultPattern string = "tslog"
+	// Default log level is InfoLevel
+	defaultMinLvl int = InfoLevel
+)
+
+// Global logger to provide a predefined standard logger
 var (
-	I *log.Logger // information
-	E *log.Logger // error
+	globalLogger *Logger = New()
 )
 
-// Prefixes of the loggers set as constants.
-const (
-	infoPrefix  string = "INFO: "  // information prefix
-	errorPrefix string = "ERROR: " // error prefix
-)
-
-// Strings for special loggers.
-const (
-	stdoutLogger  string = "stdout"  // Stdout
-	discardLogger string = "discard" // discard, no logging
-	tmpLogger     string = "tmp"     // temporary file
-)
-
-// Flags for logging properties
-const (
-	flags int = log.Ldate | log.Ltime | log.Lshortfile
-)
-
-// init initializes global loggers.
-func init() {
-	initialize()
+// Default returns the global predefined standard logger
+func Default() *Logger {
+	return globalLogger
 }
 
-// initialize sets global loggers according to env variable TS_LOGFILE.
-// On error, the function falls back to Stdout.
-func initialize() {
-	if err := setLog(); err != nil {
-		setStdout()
-		I.Printf("%v; using default log stdout", err)
-	}
+// SetLevel sets the logging level. All levels equal or higher than the set level
+// are logged. All log messages with levels below the set level are discarded.
+// SetLevel returns an error for undefined levels, otherwise nil.
+func SetLevel(level int) error {
+	return globalLogger.SetLevel(level)
 }
 
-// setLog interpretes env variable TS_LOGFILE and sets global loggers.
-func setLog() error {
-
-	// read env variable TS_LOGFILE
-	fn, isset := os.LookupEnv("TS_LOGFILE")
-
-	// error handling
-	// return error, if not set
-	if !isset {
-		return tserr.NotSet("env variable $TS_LOGFILE")
-	}
-
-	// Handle special loggers
-	switch fn {
-	case discardLogger:
-		// discard, no logging
-		noLogger()
-		// Return nil
-		return nil
-	case stdoutLogger:
-		// Logging to stdout
-		setStdout()
-		// Return nil
-		return nil
-	case tmpLogger:
-		// Create temporary file for logging
-		f, err := os.CreateTemp(os.TempDir(), "tslog_*")
-		// If it fails, return an error
-		if err != nil {
-			return tserr.Op(&tserr.OpArgs{Op: "create temp file", Fn: "tslog_*", Err: err})
-		}
-		// Activate file logging
-		setLogger(f)
-		// Return nil
-		return nil
-	}
-
-	// Use type tsfio.Filename
-	filename := tsfio.Filename(fn)
-
-	// Check filename using tsfio.CheckFile
-	if err := tsfio.CheckFile(filename); err != nil {
-		// If the check fails, return an error
-		return tserr.Check(&tserr.CheckArgs{F: string(filename), Err: err})
-	}
-
-	// Set file
-	f, e := tsfio.OpenFile(tsfio.Filename(filename))
-	// If OpenFile fails, return an error
-	if e != nil {
-		return tserr.Op(&tserr.OpArgs{Op: "open file", Fn: string(filename), Err: e})
-	}
-
-	// Activate file logging
-	setLogger(f)
-
-	// Return nil
-	return nil
+// SetOutput sets the logging output to fn. Special loggers are
+// 'stdout' for logging to Stdout (default)
+// 'discard' for no logging
+// 'tmp' for logging to tslog_* in the temporary directory
+// If SetOuput returns an error, logging is set to Stdout
+func SetOutput(fn tsfio.Filename) error {
+	return globalLogger.SetOutput(fn)
 }
 
-// setLogger initializes global loggers with f.
-func setLogger(f *os.File) {
-	if f == nil {
-		// If f is nil, fall back to logging to Stdout
-		f = os.Stdout
-	}
-	// Set loggers I and E to f
-	I = log.New(f, infoPrefix, flags)
-	E = log.New(f, errorPrefix, flags)
-
+// Trace logs a message at Trace level on the global predefined standard logger.
+// It returns an error if JSON encoding of msg fails.
+func Trace(msg string) error {
+	return globalLogger.Trace(msg)
 }
 
-// setStdout set global loggers to Stdout.
-func setStdout() {
-	setLogger(os.Stdout)
+// Debug logs a message at Debug level on the global predefined standard logger.
+// It returns an error if JSON encoding of msg fails.
+func Debug(msg string) error {
+	return globalLogger.Debug(msg)
 }
 
-// noLogger set global loggers to discard logging.
-func noLogger() {
-	I = log.New(io.Discard, "", 0)
-	E = log.New(io.Discard, "", 0)
+// Info logs a message at Info level on the global predefined standard logger.
+// It returns an error if JSON encoding of msg fails.
+func Info(msg string) error {
+	return globalLogger.Info(msg)
+}
+
+// Warn logs a message at Warn level on the global predefined standard logger.
+// It returns an error if JSON encoding of msg fails.
+func Warn(msg string) error {
+	return globalLogger.Warn(msg)
+}
+
+// Error logs error err at Error level on the global predefined standard logger.
+// It returns an error if JSON encoding of msg fails.
+func Error(err error) error {
+	return globalLogger.Error(err)
+}
+
+// Fatal logs error err at Fatal level on the global predefined standard logger.
+// It returns an error if JSON encoding of msg fails.
+func Fatal(err error) error {
+	return globalLogger.Fatal(err)
 }

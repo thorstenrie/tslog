@@ -1,332 +1,408 @@
-// Copyright (c) 2022 thorstenrie
+// Copyright (c) 2023 thorstenrie
 // All Rights Reserved. Use is governed with GNU Affero General Public License v3.0
 // that can be found in the LICENSE file.
 package tslog
 
-// Import standard library packages.
+// Import standard library packages, tserr and tsfio.
 import (
-	"io"      // io
-	"os"      // os
+	"encoding/json" // json
+	"errors"
+	"fmt" // io
+
 	"testing" // testing
 	"time"    // time
 
 	"github.com/thorstenrie/tserr" // tserr
+	"github.com/thorstenrie/tsfio" // tsfio
 )
 
-// A testcase serves input data for tests. Prefix and in are defined separately.
-// For valid prefixes, global constants infoPrefix and errorPrefix can be used.
+// A testcase serves input data for tests. A testcases contains the level and message.
 type testcase struct {
-	prefix, in string
+	level int    // Log level
+	in    string // Log message
 }
 
-// A testcheck holds an actual output log message and the wanted result.
-type testcheck struct {
-	in   string   // actual output log message
-	want testcase // wanted result (normally the input testcase)
-}
-
-// A testingtype interface implements Errorf for T, B and F.
+// A testingtype interface implements Error and Fatal for T, B and F.
 // The interface enables generic functions for all test types T, B and F.
 type testingtype interface {
-	*testing.T | *testing.B | *testing.F
-	Error(a ...any)
-	Fatal(a ...any)
+	*testing.T | *testing.B | *testing.F // Interface constraint to T, B and F
+	Error(a ...any)                      // Record formated output followed by Fail
+	Fatal(a ...any)                      // Record formated output followed by FailNow
 }
 
-// A testfunc is a function testing different dimensions of a testcheck.
-type testfunc func(*testing.T, *testcheck)
-
-// Slice of testcases.
+// Slice of testcases
 var (
-	testcases = []testcase{
-		{errorPrefix, "test"},
-		{infoPrefix, " "},
-		{errorPrefix, "Hello World!"},
-		{infoPrefix, "!12345"},
-		{errorPrefix, "\n"},
+	testcases = []*testcase{
+		{TraceLevel, "test"},
+		{DebugLevel, " "},
+		{InfoLevel, "Hello World!"},
+		{WarnLevel, "Warning!"},
+		{ErrorLevel, "!12345"},
+		{FatalLevel, "\n"},
 	}
 )
 
-// TestEmpty performs logging with the env variable TS_LOGFILE set empty.
-// Expected result is fallback logging to Stdout.
-func TestEmpty(t *testing.T) {
-	// Set env variable TS_LOGFILE to an empty string and reconfigure logging
-	setEnv(t, "")
-	// Perform logging of testcases
-	testLogAll(testcases)
-}
-
-// TestNotSet performs logging with the env variable TS_LOGFILE being unset.
-// Expected result is fallback logging to Stdout.
+// TestNotSet performs logging of all testcases with default settings.
+// Expected result is logging to Stdout.
 func TestNotSet(t *testing.T) {
-	// Unset env variable TS_LOGFILE
-	if err := os.Unsetenv("TS_LOGFILE"); err != nil {
-		t.Error(tserr.Op(&tserr.OpArgs{Op: "unset env", Fn: "TS_LOGFILE", Err: err}))
-	}
-	// Re-initialize logging
-	initialize()
-	// Perform logging of testcases
-	testLogAll(testcases)
+	testLogAll(t, testcases)
 }
 
-// TestDirectory1 performs logging with the env variable TS_LOGFILE set to a directory.
-// Expected result is fallback logging to Stdout.
-func TestDirectory1(t *testing.T) {
-	// Set env variable TS_LOGFILE to temp directory and re-initialize logging
-	setEnv(t, os.TempDir())
-	// Perform logging of testcases
-	testLogAll(testcases)
+// TestDefaultLog retrieves default global pre-defined standard logger
+// and performs logging of all testcases.
+func TestDefaultLog(t *testing.T) {
+	// Retrieve the global pre-defined standard logger in l
+	l := Default()
+	// Perform logging of all testcases with l
+	testLoggerAll(t, testcases, l)
 }
 
-// TestDirectory2 performs logging with the env variable TS_LOGFILE set to a directory.
-// Expected result is fallback logging to Stdout.
-func TestDirectory2(t *testing.T) {
-	// Set env variable TS_LOGFILE to temp directory plus / and re-initialize logging
-	setEnv(t, os.TempDir()+string(os.PathSeparator))
-	// Perform logging of testcases
-	testLogAll(testcases)
-}
-
-// TestStdout performs logging with the env variable TS_LOGFILE set to stdout.
+// TestStdout performs logging with the default logger set to stdout.
 // Expected result is logging to Stdout.
 func TestStdout(t *testing.T) {
-	// Set env variable TS_LOGFILE to stdout and re-initialize logging
-	setEnv(t, stdoutLogger)
+	// Set ouput of the default logger to Stdout
+	SetOutput(StdoutLogger)
 	// Perform logging of testcases
-	testLogAll(testcases)
+	testLogAll(t, testcases)
 }
 
-// TestTmp performs logging with the env variable TS_LOGFILE set to stdout.
-// Expected result is logging to a temp file in the temp directory.
-func TestTmp(t *testing.T) {
-	// Set env variable TS_LOGFILE to tmp and re-initialize logging
-	setEnv(t, tmpLogger)
-	// Perform logging of testcases
-	testLogAll(testcases)
-}
-
-// TestDiscard performs logging with the env variable TS_LOGFILE set to discard.
+// TestDiscard performs logging with the default logger set to discard.
 // Expected result is no logging.
 func TestDiscard(t *testing.T) {
-	// Set env variable TS_LOGFILE to discard and re-initialize logging
-	setEnv(t, discardLogger)
+	// Set ouput of the default logger to discard
+	SetOutput(DiscardLogger)
 	// Perform logging of testcases
-	testLogAll(testcases)
+	testLogAll(t, testcases)
 }
 
-// TestLogLength checks the length of all testcases in the log file.
-// Since log.Lshortfile is not securly known during runtime, it only
-// checks for the minimal length without log.Lshortfile.
-// Note: Hard-coding log.Lshortfile in test functions would break
-// tests if the source filename is changed
-func TestLogLength(t *testing.T) {
-	for tc := range testcases {
-		testWrapper(t, testcases[tc], testLength)
+// TestTmp performs logging with the default logger set to a temporary file.
+// Expected result is logging in a temporary file in the temporary directory.
+func TestTmp(t *testing.T) {
+	// Set output of the default logger to a temporary file
+	SetOutput(TmpLogger)
+	// Perform logging of testcases
+	testLogAll(t, testcases)
+}
+
+// TestDir sets output of the default logger to a directory. It is expected to
+// return an error. The test fails if no error is returned.
+func TestDir(t *testing.T) {
+	// Create temporary directory d
+	d := tmpDir(t)
+	// Set output of the default logger to d
+	if err := SetOutput(tsfio.Filename(d)); err == nil {
+		// Record an error if SetOutput returns nil instead of an error
+		t.Error(tserr.NilFailed("Set output to temp directory"))
 	}
+	// Remove the temporary directory d
+	rm(t, d)
 }
 
-// TestLogPrefix checks the prefix of all testcases in the log file.
-func TestLogPrefix(t *testing.T) {
-	for tc := range testcases {
-		testWrapper(t, testcases[tc], testPrefix)
+// TestLogger performs logging with a newly created logger with output set to a temporary file.
+// It logs all testcases to the created logger and evaluates the output in the temporary file.
+// It records an error if a performed operation reports an error or if the text in the
+// temporary output file does not match the expected result based on the testcases.
+func TestLogger(t *testing.T) {
+	// Create the temporary file fn
+	fn := tmp(t)
+	// Create new logger lg
+	lg := New()
+	// Set output to temporary file fn
+	if err := lg.SetOutput(fn); err != nil {
+		// Record an error, if SetOutput fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Set output", Fn: string(fn), Err: err}))
 	}
-}
-
-// TestLogMessage checks the contents of all testcases in the log file.
-func TestLogMessage(t *testing.T) {
-	for tc := range testcases {
-		testWrapper(t, testcases[tc], testMessage)
+	// Set logging level to Trace
+	if err := lg.SetLevel(TraceLevel); err != nil {
+		// Record an error, if SetLevel fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: fmt.Sprintf("Set level to %d for", TraceLevel), Fn: string(fn), Err: err}))
 	}
+	// Log all testcases using logger lg
+	testLoggerAll(t, testcases, lg)
+	// Evaluate logging in output file fn
+	evaluate(t, fn)
 }
 
-// BenchmarkLog performs a benchmark logging into a temp file in temp directory.
-func BenchmarkLog(b *testing.B) {
-	// Create temp file, set env variable, close the file and reconfigure logging
-	f := tmpLog(b)
-	fn := f.Name()
-	f.Close()
-	// Reset benchmark timer
-	b.ResetTimer()
-	// Run benchmark with all testcases in each iteration
-	for i := 0; i < b.N; i++ {
-		testLogAll(testcases)
+// TestLog performs logging with the default predefined standard logger with output set to a temporary file.
+// It logs all testcases to the default logger and evaluates the output in the temporary file.
+// It records an error if a performed operation reports an error or if the text in the
+// temporary output file does not match the expected result based on the testcases.
+func TestLog(t *testing.T) {
+	// Create the temporary file fn
+	fn := tmp(t)
+	// Set output to temporary file fn
+	if err := SetOutput(fn); err != nil {
+		// Record an error, if SetOutput fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Set output", Fn: string(fn), Err: err}))
 	}
-	// Remove file f
-	rm(b, fn)
-}
-
-// FuzzInfo conducts fuzzing on log messages and checks for
-// errors. The checks include the length of the log message,
-// the prefix and the correct logging of the fuzzed message.
-// Run fuzzing with go test -fuzz FuzzInfo
-// Warning: high number of file I/O
-func FuzzInfo(f *testing.F) {
-	// Addition of testcases to the seed corpus
-	for _, tc := range testcases {
-		f.Add(tc.in)
+	// Set logging level to Trace
+	if err := SetLevel(TraceLevel); err != nil {
+		// Record an error, if SetLevel fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: fmt.Sprintf("Set level to %d", TraceLevel), Fn: string(fn), Err: err}))
 	}
-	// Fuzz target
-	f.Fuzz(func(t *testing.T, a string) {
-		// Create testcase as informational log with fuzzing applied
-		// to the log message
-		tc := testcase{prefix: infoPrefix, in: a}
-		// Test log message length
-		testWrapper(t, tc, testLength)
-		// Test prefix
-		testWrapper(t, tc, testPrefix)
-		// Test log message text
-		testWrapper(t, tc, testMessage)
-	})
+	// Log all testcases using the default predefined standard logger
+	testLogAll(t, testcases)
+	// Evaluate logging in output file fn
+	evaluate(t, fn)
 }
 
-// tmpLog creates a temp log file tslog_test_* in the temp directory.
-// The env variable TS_LOGFILE is set accordingly.
-// tmpLog returns the temp file. In case of errors tmpLog returns Stdout.
-func tmpLog[T testingtype](tt T) *os.File {
-	// Create temp log file tslog_test_* in the temp directory
-	f, err := os.CreateTemp(os.TempDir(), "tslog_test_*")
-	// In case of an error fall back to Stdout for logging
-	if err != nil {
-		f.Close()
-		tt.Error(tserr.Op(&tserr.OpArgs{Op: "create", Fn: f.Name(), Err: err}))
-		return os.Stdout
+// TestSetLevelErr sets the log level one below Trace level and one above Fatal level.
+// It expects to receive an error, when calling SetLevel. The test fails if SetLevel
+// returns nil.
+func TestSetLevelErr(t *testing.T) {
+	// Set log level minus one below Trace level
+	if err := SetLevel(TraceLevel - 1); err == nil {
+		// Record an error if SetLevel returns nil
+		t.Error(tserr.NilFailed("Set level"))
 	}
-	// Set TS_LOGFILE to temp log file tslog_test_* and re-initialize logging
-	setEnv(tt, f.Name())
-	// Return temp log file tslog_test_*
-	return f
-}
-
-// rm removes file named fn. In case of an error execution stops.
-func rm[T testingtype](tt T, fn string) {
-	// Remove file
-	if err := os.Remove(fn); err != nil {
-		// Stop execution in case of an error
-		tt.Fatal(tserr.Op(&tserr.OpArgs{Op: "Remove", Fn: fn, Err: err}))
+	// Set log level plus one above Fatal level
+	if err := SetLevel(FatalLevel + 1); err == nil {
+		// Record an error if SetLevel returns nil
+		t.Error(tserr.NilFailed("Set level"))
 	}
 }
 
-// testWrapper logs a testcase into a temp file and checks the
-// result with tf.
-func testWrapper(t *testing.T, tc testcase, tf testfunc) {
-	// Create temp file, set env variable and reconfigure logging
-	f := tmpLog(t)
-	fn := f.Name()
-	// Log testcase
-	testLog(tc)
+// TestSetLevelTrace tests log messages at all log levels to be logged
+// if log level is set to Trace. It fails if an operation fails or if a
+// messaged is logged other than Trace level.
+func TestSetLevelTrace(t *testing.T) {
+	testLevel(t, testTrace)
+}
 
-	var want testcase
-	// Read log file
-	in, err := io.ReadAll(f)
-	if err != nil {
-		t.Fatal(tserr.Op(&tserr.OpArgs{Op: "ReadAll", Fn: fn, Err: err}))
+// TestSetLevelFatal tests log messages at all log levels to be logged
+// if log level is set to Fatal. It fails if an operation fails or if a
+// messaged is not logged.
+func TestSetLevelFatal(t *testing.T) {
+	testLevel(t, testFatal)
+}
+
+// testLevel iterates all log level from Trace level to Fatal level and calls testfunc tf.
+func testLevel(t *testing.T, tf testfunc) {
+	// Create an array with all log levels from Trace level to Fatal level
+	lvls := [6]int{TraceLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, FatalLevel}
+	// Create the temporary file fn
+	fn := tmp(t)
+	// Set log output to the temporary file fn
+	if err := SetOutput(fn); err != nil {
+		// Record an error if SetOutput fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Set output", Fn: string(fn), Err: err}))
 	}
-	// Close temp log file
-	if err := f.Close(); err != nil {
-		t.Error(tserr.Op(&tserr.OpArgs{Op: "Close", Fn: fn, Err: err}))
+	// Iterate all log levels
+	for _, v := range lvls {
+		// Call testfunc tf for each log level and providing fn
+		tf(t, v, fn)
 	}
-	// Remove file f
+	// Remove the temporary file fn
 	rm(t, fn)
-	// Check log file with tf
-	tf(t, &testcheck{in: string(in), want: want})
 }
 
-// testLength checks the length of a log message.
-// The minimum expected length of the log message is compared to
-// the actual length of the log message.
-// testLength implements testfunc.
-func testLength(t *testing.T, tc *testcheck) {
-	if t == nil {
-		panic("nil pointer")
+// testTrace implements testfunc. It sets log level to v, logs a testcase at Trace level
+// and evaluates the output in file fn.
+func testTrace(t *testing.T, v int, fn tsfio.Filename) {
+	// Set log level to v
+	if err := SetLevel(v); err != nil {
+		// Record an error, if SetLevel fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Set level", Fn: fmt.Sprint(v), Err: err}))
 	}
-	if tc == nil {
-		t.Fatal(tserr.NilPtr())
+	// Create testcase with log level Trace
+	tc := testcase{level: TraceLevel, in: "test"}
+	// Log testcase on log level Trace
+	if err := Trace(tc.in); err != nil {
+		// Record an error, if Trace fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Trace for level", Fn: fmt.Sprint(v), Err: err}))
 	}
-	// Calculates minimum length
-	// Note: length of log.Lshortfile not known
-	minl := len(tc.want.prefix) +
-		len(tc.want.in) +
-		len(time.Now().Format("2009/01/23 01:23:23")) +
-		2 /*spaces*/ +
-		2 /*colons*/
-	// Get actual length of log message
-	actl := len(tc.in)
-	// Error in case actual length is lower than the calculated minimum length
-	if actl < minl {
-		t.Error(tserr.Higher(&tserr.HigherArgs{Var: "length of log message", Actual: int64(actl), LowerBound: int64(minl)}))
+	// Read contents of file fn
+	in, e := tsfio.ReadFile(fn)
+	// Record an error, if ReadFile fails
+	if e != nil {
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Read file", Fn: string(fn), Err: e}))
 	}
-}
-
-// testPrefix checks the prefix of a log message
-// The expected prefix is compared to the actual prefix.
-// testPrefix implements testfunc.
-func testPrefix(t *testing.T, tc *testcheck) {
-	if t == nil {
-		panic("nil pointer")
+	// Reset file fn
+	if err := tsfio.ResetFile(fn); err != nil {
+		// Record an error, if ResetFile fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "ResetFile", Fn: string(fn), Err: err}))
 	}
-	if tc == nil {
-		t.Fatal(tserr.NilPtr())
-	}
-	// Check if the actual log message length is at least the prefix length
-	minl := len(tc.want.prefix)
-	actl := len(tc.in)
-	if actl < minl {
-		t.Fatal(tserr.Higher(&tserr.HigherArgs{Var: "log message length", Actual: int64(actl), LowerBound: int64(minl)}))
-	}
-	// Get the actual prefix of the log message
-	actp := tc.in[0:minl]
-	// Error in case the actual prefix does not match the expected prefix
-	if actp != tc.want.prefix {
-		t.Error(tserr.NotEqualStr(&tserr.NotEqualStrArgs{X: tc.want.prefix, Y: actp}))
-	}
-}
-
-// testMessage checks the contents of a log message.
-// The expected contents is compared to the actual log message.
-// testMessage implements testfunc.
-func testMessage(t *testing.T, tc *testcheck) {
-	if t == nil {
-		panic("nil pointer")
-	}
-	if tc == nil {
-		t.Fatal(tserr.NilPtr())
-	}
-	// Check if the actual log message length is at least the expected contents length
-	minl := len(tc.want.in)
-	actl := len(tc.in)
-	if actl < minl {
-		t.Fatal(tserr.Higher(&tserr.HigherArgs{Var: "length of log message", Actual: int64(actl), LowerBound: int64(minl)}))
-	}
-	// Get the actual log message without prefix and flags
-	actm := tc.in[len(tc.in)-minl:]
-	// Error in case the actual log message does not match the expected contents
-	if actm != tc.want.in {
-		t.Error(tserr.NotEqualStr(&tserr.NotEqualStrArgs{X: tc.want.in, Y: actm}))
-	}
-}
-
-// testLog logs the testcase into the log file.
-func testLog(tc testcase) {
-	if tc.prefix == infoPrefix {
-		I.Print(tc.in)
-	} else if tc.prefix == errorPrefix {
-		E.Print(tc.in)
+	// Evaluate log message from fn, in case v equals Trace level
+	if v == TraceLevel {
+		testMessage(t, in, &tc)
 	} else {
-		E.Printf("expected prefix %v or %v, but got prefix %v for log message %v", infoPrefix, errorPrefix, tc.prefix, tc.in)
+		// Check fn for its length, in case v equals a higher than Trace level
+		si := size(t, fn)
+		// Record an error, if length of fn is higher than zero
+		if si > 0 {
+			t.Error(tserr.Equal(&tserr.EqualArgs{Var: "Size of log file", Actual: si, Want: 0}))
+		}
 	}
 }
 
-// testLogAll logs all testcases into the log file.
-func testLogAll(tc []testcase) {
+// testFatal implements testfunc. It sets log level to v, logs a testcase at Fatal level
+// and evaluates the output in file fn.
+func testFatal(t *testing.T, v int, fn tsfio.Filename) {
+	// Set log level to v
+	if err := SetLevel(v); err != nil {
+		// Record an error, if SetLevel fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Set level", Fn: fmt.Sprint(v), Err: err}))
+	}
+	// Create testcase with log level Fatal
+	tc := testcase{level: FatalLevel, in: "test"}
+	// Log testcase on log level Fatal
+	if err := Fatal(errors.New(tc.in)); err != nil {
+		// Record an error, if Trace fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Fatal for level", Fn: fmt.Sprint(v), Err: err}))
+	}
+	// Reset file fn
+	in, e := tsfio.ReadFile(fn)
+	// Record an error, if ReadFile fails
+	if e != nil {
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "Read file", Fn: string(fn), Err: e}))
+	}
+	// Reset file fn
+	if err := tsfio.ResetFile(fn); err != nil {
+		// Record an error, if ResetFile fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "ResetFile", Fn: string(fn), Err: err}))
+	}
+	// Evaluate log message from fn
+	testMessage(t, in, &tc)
+}
+
+// testMessage checks the prefix and the contents of the log message in.
+// The expected prefix and the expected contents is compared to the actual log message.
+// It panics if t is nil. The execution stops if want or in are nil. The test fails
+// if Unmarchal fails, the actual prefix does not match the expected prefix or if the
+// expected message does not equal the actual message.
+func testMessage(t *testing.T, in []byte, want *testcase) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
+	// Execution stops if want or in are nil
+	if (want == nil) || (in == nil) {
+		t.Fatal(tserr.NilPtr())
+	}
+	// Retrieve wanted log level as string
+	wantl, err := level(want.level)
+	// Record error if the log level does not exit
+	if err != nil {
+		t.Error(tserr.NotExistent(fmt.Sprintf("log level %d", want.level)))
+	}
+	// Unmarshal log message in
+	var lmsg logwrap
+	if err := json.Unmarshal(in, &lmsg); err != nil {
+		// Record an error if Unmarshal fails
+		t.Error(tserr.Op(&tserr.OpArgs{Op: "json unmarshal", Fn: string(in), Err: err}))
+	}
+	// Record an error if the expected log level does not equal the actual log level
+	if lmsg.L.Lvl != wantl {
+		t.Error(tserr.NotEqualStr(&tserr.NotEqualStrArgs{X: wantl, Y: lmsg.L.Lvl}))
+	}
+	// Record an error if the expected log message does not equal the actual log message
+	if lmsg.L.Msg != want.in {
+		t.Error(tserr.NotEqualStr(&tserr.NotEqualStrArgs{X: want.in, Y: lmsg.L.Msg}))
+	}
+	// Record an error if the timestamp of the log message cannot be parsed
+	if _, err := time.Parse(timeLayout, lmsg.L.Now); err != nil {
+		t.Error(tserr.Check(&tserr.CheckArgs{F: lmsg.L.Now, Err: err}))
+	}
+}
+
+// testLogAll logs all testcases in tc. It panics, if t is nil. It records an error if
+// tc is nil or if logging of a testcase in tc fails.
+func testLogAll(t *testing.T, tc []*testcase) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
+	// Record an error if tc is nil
+	if tc == nil {
+		t.Error(tserr.NilPtr())
+	}
+	// Iterate all testcases in tc
 	for i := range tc {
-		testLog(tc[i])
+		// Log all testcases
+		if e := testLog(tc[i]); e != nil {
+			// Record an error if logging fails
+			t.Error(tserr.Op(&tserr.OpArgs{Op: "test log", Fn: fmt.Sprint(tc[i]), Err: e}))
+		}
 	}
 }
 
-// setEnv sets env variable TS_LOGFILE to fn and re-initialize loggers.
-func setEnv[T testingtype](tt T, fn string) {
-	if err := os.Setenv("TS_LOGFILE", fn); err != nil {
-		tt.Fatal(tserr.Op(&tserr.OpArgs{Op: "set env", Fn: "TS_LOGFILE", Err: err}))
+// testLog logs testcase tc. It returns an error fi tc is nil or if the log level
+// of the testcase does not exist.
+func testLog(tc *testcase) error {
+	// Return an error if tc is nil
+	if tc == nil {
+		return tserr.NilPtr()
 	}
-	initialize()
+	// Log according to the defined log level in testcase tc
+	switch tc.level {
+	case TraceLevel:
+		return Trace(tc.in)
+	case DebugLevel:
+		return Debug(tc.in)
+	case InfoLevel:
+		return Info(tc.in)
+	case WarnLevel:
+		return Warn(tc.in)
+	case ErrorLevel:
+		return Error(errors.New(tc.in))
+	case FatalLevel:
+		return Fatal(errors.New(tc.in))
+	}
+	// Return an error if the log level does not exist
+	return tserr.NotExistent(fmt.Sprintf("%d", tc.level))
+}
+
+// testLoggerAll logs all testcases in tc using the logger l. It panics
+// if t is nil. It stops execution if l or tc are nil. It records an error
+// if the testcase is nil or if logging fails.
+func testLoggerAll(t *testing.T, tc []*testcase, l *Logger) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
+	// Stop execution if l or tc are nil
+	if (l == nil) || (tc == nil) {
+		t.Fatal(tserr.NilPtr())
+	}
+	// Iterate all testcases in tc
+	for i := range tc {
+		// Record an error if the testcase is nil
+		if tc[i] == nil {
+			t.Error(tserr.NilPtr())
+		} else {
+			// Log testcase with logger l
+			if e := testLogger(tc[i], l); e != nil {
+				// Record an error if logging fails
+				t.Error(tserr.Op(&tserr.OpArgs{Op: "test log", Fn: fmt.Sprint(tc[i]), Err: e}))
+			}
+		}
+	}
+}
+
+// testLogger logs the testcase using logger l. It returns an error
+// if l or tc are nil. It also returns an error if the log level
+// in testcase tc does not exist.
+func testLogger(tc *testcase, l *Logger) error {
+	// Return an error if l or tc are nil
+	if (l == nil) || (tc == nil) {
+		return tserr.NilPtr()
+	}
+	// Log testcase according to the defined log level
+	// in the testcase
+	switch tc.level {
+	case TraceLevel:
+		return l.Trace(tc.in)
+	case DebugLevel:
+		return l.Debug(tc.in)
+	case InfoLevel:
+		return l.Info(tc.in)
+	case WarnLevel:
+		return l.Warn(tc.in)
+	case ErrorLevel:
+		return l.Error(errors.New(tc.in))
+	case FatalLevel:
+		return l.Fatal(errors.New(tc.in))
+	}
+	// Return an error if the log level in the testcase does not exist.
+	return tserr.NotExistent(fmt.Sprintf("%d", tc.level))
 }
