@@ -46,7 +46,7 @@ const (
 const (
 	// Layout for timestamp in the log message
 	timeLayout string = "2006-01-02 15:04:05 -0700 MST"
-	// Root element for JSON format
+	// Root element for temporary file
 	defaultPattern string = "tslog"
 	// Default log level is InfoLevel
 	defaultMinLvl int = InfoLevel
