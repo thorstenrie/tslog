@@ -18,7 +18,7 @@
 [Go](https://go.dev/) package for logging that tries to keep it simple ([KISS principle](https://en.wikipedia.org/wiki/KISS_principle)).
 
 - **Simple**: Pre-defined global logger to Stdout without configuration and log levels Trace, Debug, Info, Warn, Error and Fatal.
-- **Easy to parse**: The log messages are formatted in JSON format to enable parsing.
+- **Easy to parse**: The log messages are formatted in JSON format.
 - **Flexible**: Logging can be configured to stdout (default), to a temp file, a specifically defined file or even discarded.
 - **Tested**: Unit tests with high [code coverage](https://gocover.io/github.com/thorstenrie/tslog)
 - **Dependencies**: Only depends on [Go Standard Library](https://pkg.go.dev/std), [tsfio](https://gocover.io/github.com/thorstenrie/tsfio) and [tserr](https://gocover.io/github.com/thorstenrie/tserr)
@@ -47,17 +47,7 @@ func Fatal(err error) error
 ```
 
 Log levels `Error` and `Fatal` receive an error for logging.
-An error can be retrieved with func [New](https://pkg.go.dev/errors#New)
-
-```
-func errors.New(text string) error
-```
-
-or with func [Errorf](https://pkg.go.dev/fmr#Errorf)
-
-```
-func fmt.Errorf(format string, a ...any) error
-```
+An error can be retrieved with package [tserr](https://gocover.io/github.com/thorstenrie/tserr), func [New](https://pkg.go.dev/errors#New) or or with func [Errorf](https://pkg.go.dev/fmr#Errorf)
 
 The default logger can be retrieved with
 
@@ -117,14 +107,7 @@ func (l *Logger) SetLevel(level int) error
 
 ## Output
 
-The log messages are formatted in the JSON format. The root element is named
-
-```
-	// Root element for JSON format
-	defaultPattern string = "tslog"
-```
-
-Each log message has a "level" which is a string representing the log level, the "message" and timestamp "time". The timestamp has the format
+The log messages are formatted in the JSON format. The root element is named `log`. Each log message has the field "level" which is a string respresentation of the log level, the field "message" and timestamp field "time". The timestamp has the format
 
 ```
 	// Layout for timestamp in the log message
