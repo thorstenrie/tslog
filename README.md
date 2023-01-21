@@ -84,19 +84,24 @@ func (l *Logger) SetOutput(fn tsfio.Filename) error
 A logger can be configured to log from a specific level and any higher level. The levels are defined as
 
 ```
-	// Trace: log the execution of code of the app
-	TraceLevel int = 1
-	// Debug: log detailed events for debugging of the app
-	DebugLevel int = 2
-	// Info: log an event under normal conditions of the app
-	InfoLevel int = 3
-	// Warn: log an unintended event, which is tried to be recovered and potentially
-	// impacting execution of the app
-	WarnLevel int = 4
-	// Error: log an unexpected event with at least one function of the app being not operable
-	ErrorLevel int = 5
-	// Fatal: log an unexpected critical event forcing a shutdown of the app
-	FatalLevel int = 6
+// Trace: log the execution of code of the app
+TraceLevel int = 1
+
+// Debug: log detailed events for debugging of the app
+DebugLevel int = 2
+
+// Info: log an event under normal conditions of the app
+InfoLevel int = 3
+
+// Warn: log an unintended event, which is tried to be recovered and potentially
+// impacting execution of the app
+WarnLevel int = 4
+
+// Error: log an unexpected event with at least one function of the app being not operable
+ErrorLevel int = 5
+
+// Fatal: log an unexpected critical event forcing a shutdown of the app
+FatalLevel int = 6
 ```
 
 The log level is set with
@@ -110,8 +115,8 @@ func (l *Logger) SetLevel(level int) error
 The log messages are formatted in the JSON format. The root element is named `log`. Each log message has the field "level" which is a string respresentation of the log level, the field "message" and timestamp field "time". The timestamp has the format
 
 ```
-	// Layout for timestamp in the log message
-	timeLayout string = "2006-01-02 15:04:05 -0700 MST"
+// Layout for timestamp in the log message
+timeLayout string = "2006-01-02 15:04:05 -0700 MST"
 ```
 
 ## Example
@@ -120,12 +125,32 @@ The log messages are formatted in the JSON format. The root element is named `lo
 package main
 
 import (
-	"github.com/thorstenrie/tslog"
+    "errors"
+    "github.com/thorstenrie/tslog"
 )
 
 func main() {
-	// TODO
+    l := tslog.Default()
+    l.SetLevel(tslog.TraceLevel)
+    l.SetOutput("stdout")
+    l.Trace("trace")
+    l.Debug("debug")
+    l.Info("info")
+    l.Warn("warn")
+    l.Error(errors.New("error"))
+    l.Fatal(errors.New("fatal"))
 }
+```
+
+Output
+
+```
+{"log":{"level":"trace","message":"trace","time":"2023-01-21 12:51:56 +0100 CET"}}
+{"log":{"level":"debug","message":"debug","time":"2023-01-21 12:51:56 +0100 CET"}}
+{"log":{"level":"info","message":"info","time":"2023-01-21 12:51:56 +0100 CET"}}
+{"log":{"level":"warn","message":"warn","time":"2023-01-21 12:51:56 +0100 CET"}}
+{"log":{"level":"error","message":"error","time":"2023-01-21 12:51:56 +0100 CET"}}
+{"log":{"level":"fatal","message":"fatal","time":"2023-01-21 12:51:56 +0100 CET"}}
 ```
 
 ## Links
