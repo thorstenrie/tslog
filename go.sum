@@ -1,4 +1,4 @@
-github.com/thorstenrie/tserr v1.5.0 h1:jNHku5f/yvS7FxpItJX7T+Gw63iTHq4e6nMc9jFpDPI=
-github.com/thorstenrie/tserr v1.5.0/go.mod h1:DcNlnc7MhNrW7OsrWs1q8ETCf2YjFjMgnkOM47iWQu8=
-github.com/thorstenrie/tsfio v1.1.0 h1:5DcPf8pkn3t6jQYSSqTK1NEbutwjKpj5ipWxnpPVL54=
-github.com/thorstenrie/tsfio v1.1.0/go.mod h1:pHMnBHZ7dxGoGM90eAeWDDdElRorK5DkZhFF7oEy+Dw=
+github.com/thorstenrie/tserr v1.5.1 h1:ct35qjlP6dsCQ5wQO+F2pY8uqbqqvDY6PDlJHC9KSo4=
+github.com/thorstenrie/tserr v1.5.1/go.mod h1:s/wDwTQb7zbVPut9qeDy24TQgRYvI/KBhL4ADAFG2kI=
+github.com/thorstenrie/tsfio v1.1.1 h1:hCr/6JTzM6b/oZ0XMBWGtiTVeT4qvK2eN4gRN3LvgLk=
+github.com/thorstenrie/tsfio v1.1.1/go.mod h1:zPVWqTrmhzWYyQfscQ4uRL/IV5CwiLsMzWyD6qC8mVU=

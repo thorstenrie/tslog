@@ -25,6 +25,10 @@ type fio interface {
 // tmpLog creates a temp log file tslog_test_* in the temp directory.
 // It returns the temp filename. In case of errors tmpLog returns Stdout.
 func tmp[T testingtype](tt T) tsfio.Filename {
+	// Panic if tt is nil
+	if tt == nil {
+		panic("nil pointer")
+	}
 	// Create temp log file tslog_test_* in the temp directory
 	f, err := os.CreateTemp(os.TempDir(), "tslog_test_*")
 	// In case of an error fall back to Stdout for logging
@@ -51,6 +55,10 @@ func tmp[T testingtype](tt T) tsfio.Filename {
 // with the prefix tslog_testdir_ and a random string to the end. In case of an error
 // the execution stops.
 func tmpDir[T testingtype](tt T) tsfio.Directory {
+	// Panic if tt is nil
+	if tt == nil {
+		panic("nil pointer")
+	}
 	// Create the temporary directory
 	d, err := os.MkdirTemp("", "tslog_testdir_*")
 	// Stop execution in case of an error
@@ -64,6 +72,10 @@ func tmpDir[T testingtype](tt T) tsfio.Directory {
 // rm removes the file named Filename a or empty Directory a. In case of an error
 // execution stops.
 func rm[T fio](t *testing.T, a T) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
 	// Remove file or empty directory
 	if err := os.Remove(string(a)); err != nil {
 		// Stop execution in case of an error
@@ -73,6 +85,10 @@ func rm[T fio](t *testing.T, a T) {
 
 // size returns the length of regular file fn.
 func size[T testingtype](tt T, fn tsfio.Filename) int64 {
+	// Panic if tt is nil
+	if tt == nil {
+		panic("nil pointer")
+	}
 	// Retrieve length of file fn
 	fs, e := tsfio.FileSize(fn)
 	// Record an error, if FileSize fails.

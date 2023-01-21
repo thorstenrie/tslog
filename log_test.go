@@ -178,6 +178,10 @@ func TestSetLevelFatal(t *testing.T) {
 
 // testLevel iterates all log level from Trace level to Fatal level and calls testfunc tf.
 func testLevel(t *testing.T, tf testfunc) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
 	// Create an array with all log levels from Trace level to Fatal level
 	lvls := [6]int{TraceLevel, DebugLevel, InfoLevel, WarnLevel, ErrorLevel, FatalLevel}
 	// Create the temporary file fn
@@ -199,6 +203,10 @@ func testLevel(t *testing.T, tf testfunc) {
 // testTrace implements testfunc. It sets log level to v, logs a testcase at Trace level
 // and evaluates the output in file fn.
 func testTrace(t *testing.T, v int, fn tsfio.Filename) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
 	// Set log level to v
 	if err := SetLevel(v); err != nil {
 		// Record an error, if SetLevel fails
@@ -238,6 +246,10 @@ func testTrace(t *testing.T, v int, fn tsfio.Filename) {
 // testFatal implements testfunc. It sets log level to v, logs a testcase at Fatal level
 // and evaluates the output in file fn.
 func testFatal(t *testing.T, v int, fn tsfio.Filename) {
+	// Panic if t is nil
+	if t == nil {
+		panic("nil pointer")
+	}
 	// Set log level to v
 	if err := SetLevel(v); err != nil {
 		// Record an error, if SetLevel fails
